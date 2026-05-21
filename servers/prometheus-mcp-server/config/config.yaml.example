@@ -1,0 +1,45 @@
+# Prometheus MCP Server Configuration
+#
+# This file configures the Prometheus environments available for querying.
+# Copy this to ~/.prometheus-mcp/config.yaml and modify for your setup.
+#
+# Usage: prometheus-mcp-server --config ~/.prometheus-mcp/config.yaml
+
+environments:
+  # Local development Prometheus
+  local:
+    url: "http://localhost:9090"
+    auth:
+      type: "none"
+    timeout: 10
+    verify_ssl: true
+
+  # Production environment (example)
+  production:
+    url: "http://prometheus.prod.example.com:9090"
+    auth:
+      type: "none"  # Change to "basic" or "bearer" if needed
+      # For basic auth:
+      # type: "basic"
+      # username: "admin"
+      # password: "your-password"
+      #
+      # For bearer token:
+      # type: "bearer"
+      # token: "your-token-here"
+    timeout: 30
+    verify_ssl: true
+
+  # Staging environment (example)
+  staging:
+    url: "http://prometheus.staging.example.com:9090"
+    auth:
+      type: "none"
+    timeout: 30
+    verify_ssl: true
+
+# Default settings applied to all environments
+defaults:
+  timeout: 30           # Request timeout in seconds
+  max_results: 100      # Maximum results to return
+  default_step: "1m"    # Default step for range queries

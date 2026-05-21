@@ -1,0 +1,19 @@
+environments:
+  local:
+    url: "http://localhost:9090"
+    auth:
+      type: "none"
+    timeout: 10
+    verify_ssl: true
+
+  production:
+    url: "http://prometheus.prod.example.com:9090"
+    auth:
+      type: "none"
+    timeout: 30
+    verify_ssl: true
+
+defaults:
+  timeout: 30
+  max_results: 100
+  default_step: "1m"
