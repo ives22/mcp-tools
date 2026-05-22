@@ -15,11 +15,27 @@
 
 ## 🏗️ 架构
 
+### stdio 模式（推荐）
+
+```
+┌─────────────┐     stdio (stdin/stdout)     ┌─────────────────────┐
+│  Hermes     │ ◄──────────────────────────► │  Prometheus         │
+│  Agent      │                              │  MCP Server (子进程)  │
+│             │                              └────────┬────────────┘
+└─────────────┘                                       │
+                                            ┌─────────┴─────────┐
+                                            │  Config File       │
+                                            │  (~/.prometheus-   │
+                                            │   mcp/config.yaml) │
+                                            └────────────────────┘
+```
+
+### HTTP 模式（独立服务）
+
 ```
 ┌─────────────┐    HTTP/StreamableHTTP     ┌─────────────────────┐
-│  Hermes     │ ◄────────────────────────► │ Prometheus          │
-│  Agent      │   MCP Protocol             │ MCP Server          │
-│  (Bot)      │                            │ (独立服务)           │
+│  Hermes     │ ◄────────────────────────► │  Prometheus         │
+│  Agent      │   MCP Protocol             │  MCP Server (独立服务)│
 └─────────────┘                            └────────┬────────────┘
                                                     │
                                           ┌─────────┴─────────┐
@@ -51,11 +67,28 @@ vim ~/.prometheus-mcp/config.yaml
 
 ### 3. 启动服务
 
+#### 方式一：uvx 直接运行（推荐，免安装）
+
 ```bash
-# HTTP 模式（默认，推荐用于独立服务）
+# stdio 模式（用于 Hermes Agent 本地集成，推荐）
+uvx prometheus-mcp-server --transport stdio
+
+# HTTP 模式（独立服务，用于远程或调试）
+uvx prometheus-mcp-server --host 0.0.0.0 --port 8000
+```
+
+> 首次运行 `uvx` 会自动从 PyPI 下载并执行，无需手动 `pip install`。
+
+#### 方式二：本地安装后运行
+
+```bash
+cd /root/prometheus-mcp-server
+pip install -e .
+
+# HTTP 模式（默认，独立服务）
 prometheus-mcp-server --host 0.0.0.0 --port 8000
 
-# stdio 模式（用于本地调试）
+# stdio 模式（本地集成）
 prometheus-mcp-server --transport stdio
 
 # 详细日志
@@ -64,7 +97,24 @@ prometheus-mcp-server -v
 
 ### 4. 配置 Hermes Agent
 
-在 `~/.hermes/config.yaml` 中添加 MCP Server：
+#### stdio 模式（推荐，无需启动独立服务）
+
+在 `~/.hermes/config.yaml` 中添加：
+
+```yaml
+mcp_servers:
+  prometheus:
+    command: "uvx"
+    args: ["prometheus-mcp-server", "--transport", "stdio"]
+    timeout: 60
+    connect_timeout: 30
+```
+
+重启 Hermes Agent 后，工具会自动注册为 `mcp_prometheus_*`。
+
+#### HTTP 模式（独立服务）
+
+先启动 HTTP 服务（见上方启动服务），然后在 `~/.hermes/config.yaml` 中添加：
 
 ```yaml
 mcp_servers:
