@@ -56,19 +56,54 @@
 
 ### 1. 安装
 
+#### 从 Git 仓库安装
+
 ```bash
-cd /root/prometheus-mcp-server
-pip install -e .
-# 或者使用 uv
-uv pip install -e .
+pip install git+https://github.com/ives22/mcp-tools.git#subdirectory=servers/prometheus-mcp-server
+```
+
+#### 从源码安装
+
+```bash
+git clone https://github.com/ives22/mcp-tools.git
+cd mcp-tools/servers/prometheus-mcp-server
+pip install .
+```
+
+#### 使用 uvx 免安装运行
+
+```bash
+# 首次运行会自动下载，无需手动 pip install
+uvx prometheus-mcp-server --transport stdio
+```
+
+#### 使用 Docker（HTTP 模式，无需 Python 环境）
+
+```bash
+# 构建镜像
+git clone https://github.com/ives22/mcp-tools.git
+cd mcp-tools/servers/prometheus-mcp-server
+docker build -t prometheus-mcp-server .
+
+# 运行（挂载配置文件）
+docker run -d --name prometheus-mcp \
+  -p 8000:8000 \
+  -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
+  prometheus-mcp-server
+
+# 或使用 docker-compose（见下方 docker-compose 章节）
 ```
 
 ### 2. 配置
 
 ```bash
+# 创建配置目录
 mkdir -p ~/.prometheus-mcp
+
+# 复制配置模板
 cp config/config.yaml.example ~/.prometheus-mcp/config.yaml
-# 编辑配置文件，添加你的 Prometheus 地址
+
+# 编辑配置，填入你的 Prometheus 地址和认证信息
 vim ~/.prometheus-mcp/config.yaml
 ```
 
@@ -77,21 +112,16 @@ vim ~/.prometheus-mcp/config.yaml
 #### 方式一：uvx 直接运行（推荐，免安装）
 
 ```bash
-# stdio 模式（用于 Hermes Agent 本地集成，推荐）
+# stdio 模式（用于 AI Agent 本地集成，推荐）
 uvx prometheus-mcp-server --transport stdio
 
-# HTTP 模式（独立服务，用于远程或调试）
+# HTTP 模式（独立服务，用于远程或多客户端共享）
 uvx prometheus-mcp-server --host 0.0.0.0 --port 8000
 ```
-
-> 首次运行 `uvx` 会自动从 PyPI 下载并执行，无需手动 `pip install`。
 
 #### 方式二：本地安装后运行
 
 ```bash
-cd /root/prometheus-mcp-server
-pip install -e .
-
 # HTTP 模式（默认，独立服务）
 prometheus-mcp-server --host 0.0.0.0 --port 8000
 
@@ -102,11 +132,32 @@ prometheus-mcp-server --transport stdio
 prometheus-mcp-server -v
 ```
 
-### 4. 配置 Hermes Agent
+#### 方式三：Docker 运行
+
+```bash
+# HTTP 模式（默认）
+docker run -d -p 8000:8000 \
+  -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
+  prometheus-mcp-server
+
+# 自定义端口
+docker run -d -p 9000:9000 \
+  -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
+  prometheus-mcp-server --port 9000
+
+# stdio 模式（用于 Docker + MCP 客户端集成）
+docker run -i --rm \
+  -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
+  prometheus-mcp-server --transport stdio
+```
+
+### 4. 配置 MCP 客户端
+
+本 MCP Server 兼容所有支持 MCP 协议的客户端（Hermes Agent、Claude Desktop、Cursor、Continue 等）。
 
 #### stdio 模式（推荐，无需启动独立服务）
 
-在 `~/.hermes/config.yaml` 中添加：
+**Hermes Agent** (`~/.hermes/config.yaml`)：
 
 ```yaml
 mcp_servers:
@@ -117,21 +168,56 @@ mcp_servers:
     connect_timeout: 30
 ```
 
-重启 Hermes Agent 后，工具会自动注册为 `mcp_prometheus_*`。
+**Claude Desktop** (`claude_desktop_config.json`)：
+
+```json
+{
+  "mcpServers": {
+    "prometheus": {
+      "command": "uvx",
+      "args": ["prometheus-mcp-server", "--transport", "stdio"]
+    }
+  }
+}
+```
 
 #### HTTP 模式（独立服务）
 
-先启动 HTTP 服务（见上方启动服务），然后在 `~/.hermes/config.yaml` 中添加：
+先启动 HTTP 服务，然后在客户端配置中添加：
 
 ```yaml
 mcp_servers:
   prometheus:
-    url: "http://localhost:8000"  # MCP Server 地址
+    url: "http://localhost:8000/mcp"
     timeout: 60
     connect_timeout: 30
 ```
 
-重启 Hermes Agent 后，工具会自动注册为 `mcp_prometheus_*`。
+### 5. Docker Compose（可选）
+
+适合长期运行的 HTTP 服务模式：
+
+```yaml
+# docker-compose.yml
+services:
+  prometheus-mcp:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/root/.prometheus-mcp/config.yaml:ro
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=INFO
+```
+
+```bash
+# 启动
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+```
 
 ## 📋 可用工具
 
