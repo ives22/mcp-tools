@@ -6,10 +6,14 @@
 
 - 📊 **即时查询** - 查询当前指标值（`/api/v1/query`）
 - 📈 **范围查询** - 查询历史数据趋势（`/api/v1/query_range`）
+- 🔍 **序列发现** - 查找匹配的时间序列，无需计算值（`/api/v1/series`）
 - 🚨 **告警管理** - 查看告警规则和当前活动告警
+- 📡 **Alertmanager** - 查看 Alertmanager 实例及连接状态
 - 🎯 **目标状态** - 查看 scrape targets 的健康状态
 - 📖 **指标元数据** - 了解指标类型、帮助文本和单位
 - 🏷️ **标签查询** - 发现标签的可能值
+- ⚙️ **运行时配置** - 查看 Prometheus 运行时 YAML 配置
+- 🚩 **启动参数** - 查看 Prometheus 命令行启动参数
 - 🔐 **多环境支持** - 同时管理多个 Prometheus 实例
 - 🔒 **认证兼容** - 支持无认证、Basic Auth、Bearer Token
 
@@ -128,17 +132,23 @@ mcp_servers:
 
 ## 📋 可用工具
 
-| 工具名称 | 描述 |
-|---------|------|
-| `prometheus_query` | 即时 PromQL 查询（当前值） |
-| `prometheus_query_range` | 范围查询（历史数据） |
-| `prometheus_list_rules` | 查看告警/记录规则 |
-| `prometheus_list_alerts` | 查看当前活动告警 |
-| `prometheus_list_targets` | 查看 scrape 目标状态 |
-| `prometheus_get_metadata` | 获取指标元数据（类型、帮助文本） |
-| `prometheus_get_label_values` | 获取标签的所有可能值 |
-| `prometheus_list_environments` | 列出所有配置的环境 |
-| `prometheus_health` | 检查 Prometheus 健康状态 |
+| 工具名称 | 描述 | 对应 API |
+|---------|------|----------|
+| `prometheus_query` | 即时 PromQL 查询（当前值） | `/api/v1/query` |
+| `prometheus_query_range` | 范围查询（历史数据） | `/api/v1/query_range` |
+| `prometheus_query_series` | 查找匹配的时间序列（不计算值） | `/api/v1/series` |
+| `prometheus_list_rules` | 查看告警/记录规则 | `/api/v1/rules` |
+| `prometheus_list_alerts` | 查看当前活动告警 | `/api/v1/alerts` |
+| `prometheus_list_targets` | 查看 scrape 目标状态 | `/api/v1/targets` |
+| `prometheus_get_metadata` | 获取指标元数据（类型、帮助文本） | `/api/v1/metadata` |
+| `prometheus_get_label_values` | 获取标签的所有可能值 | `/api/v1/label/<name>/values` |
+| `prometheus_list_metrics` | 列出所有可用指标名称 | `/api/v1/label/__name__/values` |
+| `prometheus_list_labels` | 列出所有标签名称 | `/api/v1/labels` |
+| `prometheus_list_environments` | 列出所有配置的环境 | — |
+| `prometheus_health` | 检查 Prometheus 健康状态和版本信息 | `/api/v1/status/buildinfo` |
+| `prometheus_get_config` | 获取 Prometheus 运行时配置（YAML） | `/api/v1/status/config` |
+| `prometheus_get_flags` | 获取 Prometheus 启动参数 | `/api/v1/status/flags` |
+| `prometheus_list_alertmanagers` | 列出 Alertmanager 实例及连接状态 | `/api/v1/alertmanagers` |
 
 ## 💬 使用示例
 

@@ -62,9 +62,19 @@ class PrometheusClient:
             response = await client.request(method, path, params=params)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            raise PrometheusAPIError(e.response.status_code, e.response.text)
+            # Try to parse Prometheus error response
+            try:
+                error_data = e.response.json()
+                error_type = error_data.get("errorType", "unknown")
+                error_msg = error_data.get("error", e.response.text)
+                raise PrometheusAPIError(
+                    e.response.status_code,
+                    f"[{error_type}] {error_msg}"
+                ) from e
+            except (ValueError, AttributeError):
+                raise PrometheusAPIError(e.response.status_code, e.response.text) from e
         except httpx.RequestError as e:
-            raise PrometheusError(f"Request failed: {e}")
+            raise PrometheusError(f"Request failed: {e}") from e
 
         data = response.json()
         if data.get("status") != "success":
@@ -175,17 +185,20 @@ class PrometheusClient:
             params["start"] = start
         if end:
             params["end"] = end
-        return await self._request(
+        
+        result = await self._request(
             "GET", f"/api/v1/label/{label_name}/values", params=params
         )
+        # This endpoint returns a list directly, not wrapped in data
+        return {"values": result} if isinstance(result, list) else result
 
-    async def get_series_labels(
+    async def get_label_names(
         self,
         match: list[str] | None = None,
         start: str | None = None,
         end: str | None = None,
     ) -> dict[str, Any]:
-        """Get all label names for series (/api/v1/labels).
+        """Get all label names (/api/v1/labels).
 
         Args:
             match: Series matchers (optional)
@@ -199,8 +212,45 @@ class PrometheusClient:
             params["start"] = start
         if end:
             params["end"] = end
-        return await self._request("GET", "/api/v1/labels", params=params)
+        
+        result = await self._request("GET", "/api/v1/labels", params=params)
+        # This endpoint returns a list directly
+        return {"labels": result} if isinstance(result, list) else result
+
+    async def get_series(
+        self,
+        match: list[str],
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict[str, Any]:
+        """Find series by label matchers (/api/v1/series).
+
+        Args:
+            match: Series matchers (required)
+            start: Start time (optional)
+            end: End time (optional)
+        """
+        params: dict[str, Any] = {"match[]": match}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        return await self._request("GET", "/api/v1/series", params=params)
 
     async def health(self) -> dict[str, str]:
         """Check Prometheus health (/api/v1/status/buildinfo)."""
         return await self._request("GET", "/api/v1/status/buildinfo")
+
+    # --- Status APIs ---
+
+    async def get_config(self) -> dict[str, Any]:
+        """Get Prometheus runtime configuration (/api/v1/status/config)."""
+        return await self._request("GET", "/api/v1/status/config")
+
+    async def get_flags(self) -> dict[str, Any]:
+        """Get Prometheus command-line flags (/api/v1/status/flags)."""
+        return await self._request("GET", "/api/v1/status/flags")
+
+    async def get_alertmanagers(self) -> dict[str, Any]:
+        """Get Alertmanager instances (/api/v1/alertmanagers)."""
+        return await self._request("GET", "/api/v1/alertmanagers")

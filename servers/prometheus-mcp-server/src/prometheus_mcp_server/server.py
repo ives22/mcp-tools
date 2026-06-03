@@ -1,30 +1,38 @@
-"""Prometheus MCP Server - main server logic with HTTP transport."""
+"""Prometheus MCP Server - main server logic with stdio and HTTP transport."""
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import json
 import logging
 import sys
-from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 
 from mcp.server import Server
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import Tool
+from mcp.types import (
+    Tool,
+    TextContent,
+    Resource,
+    Prompt,
+    PromptArgument,
+    PromptMessage,
+    GetPromptResult,
+)
 
 from .config import MCPConfig, load_config
-from .client import PrometheusClient
+from .client import PrometheusClient, PrometheusError
 from .tools import HANDLERS, get_tool_definitions
 
 logger = logging.getLogger("prometheus-mcp-server")
 
 
 def create_server(config: MCPConfig) -> Server:
-    """Create the MCP server with all Prometheus tools."""
+    """Create the MCP server with all Prometheus tools, resources, and prompts."""
     server = Server("prometheus-mcp-server")
-
     tool_defs = get_tool_definitions()
+
+    # ===== Tools =====
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -38,9 +46,7 @@ def create_server(config: MCPConfig) -> Server:
         ]
 
     @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
-        from mcp.types import TextContent
-
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         logger.info(f"Tool call: {name} with args: {arguments}")
 
         try:
@@ -48,16 +54,19 @@ def create_server(config: MCPConfig) -> Server:
                 from .tools import handle_list_environments
                 result = await handle_list_environments(config)
             else:
-                env = arguments.get("environment", "")
-                if not env and name != "prometheus_list_environments":
+                env_name = arguments.get("environment", "")
+                if not env_name:
                     return [
                         TextContent(
                             type="text",
-                            text=f"Error: 'environment' parameter is required for {name}",
+                            text=(
+                                f"Error: 'environment' parameter is required for {name}. "
+                                f"Available environments: {', '.join(config.list_environments())}"
+                            ),
                         )
                     ]
 
-                env_config = config.get_environment(env)
+                env_config = config.get_environment(env_name)
                 client = PrometheusClient(env_config)
                 try:
                     handler = HANDLERS.get(name)
@@ -65,19 +74,21 @@ def create_server(config: MCPConfig) -> Server:
                         return [
                             TextContent(
                                 type="text",
-                                text=f"Error: Unknown tool '{name}'",
+                                text=json.dumps(
+                                    {"error": f"Unknown tool '{name}'"},
+                                    indent=2,
+                                ),
                             )
                         ]
 
                     if name == "prometheus_health":
                         from .tools import handle_health
-                        result = await handle_health(client, env)
+                        result = await handle_health(client, env_name)
                     else:
-                        result = await handler(client, env, arguments)
+                        result = await handler(client, env_name, arguments)
                 finally:
                     await client.close()
 
-            import json
             return [
                 TextContent(
                     type="text",
@@ -90,21 +101,225 @@ def create_server(config: MCPConfig) -> Server:
             return [
                 TextContent(
                     type="text",
-                    text=json.dumps({"error": str(e), "tool": name}, indent=2),
+                    text=json.dumps(
+                        {
+                            "error": str(e),
+                            "tool": name,
+                            "hint": "Check environment name, query syntax, and Prometheus connectivity",
+                        },
+                        indent=2,
+                    ),
                 )
             ]
+
+    # ===== Resources =====
+
+    @server.list_resources()
+    async def list_resources() -> list[Resource]:
+        resources = []
+        for env_name in config.list_environments():
+            env_config = config.environments[env_name]
+            resources.append(
+                Resource(
+                    uri=f"prometheus://{env_name}/info",  # type: ignore[arg-type]
+                    name=f"{env_name} - Environment Info",
+                    description=f"Prometheus environment: {env_config.url}",
+                    mimeType="application/json",
+                )
+            )
+        return resources
+
+    @server.read_resource()
+    async def read_resource(uri: Any) -> str:
+        # Parse URI: prometheus://<env>/info
+        uri_str = str(uri)
+        if not uri_str.startswith("prometheus://"):
+            raise ValueError(f"Invalid resource URI: {uri_str}")
+
+        parts = uri_str.replace("prometheus://", "").split("/")
+        if len(parts) < 2:
+            raise ValueError(f"Invalid resource URI format: {uri_str}")
+
+        env_name = parts[0]
+        resource_type = parts[1]
+
+        env_config = config.get_environment(env_name)
+        client = PrometheusClient(env_config)
+        try:
+            if resource_type == "info":
+                health = await client.health()
+                return json.dumps(
+                    {
+                        "environment": env_name,
+                        "url": env_config.url,
+                        "health": health,
+                    },
+                    default=str,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            else:
+                raise ValueError(f"Unknown resource type: {resource_type}")
+        finally:
+            await client.close()
+
+    # ===== Prompts =====
+
+    @server.list_prompts()
+    async def list_prompts() -> list[Prompt]:
+        return [
+            Prompt(
+                name="query-metric",
+                description="Query a specific metric in a Prometheus environment",
+                arguments=[
+                    PromptArgument(
+                        name="environment",
+                        description="Target environment (e.g., production, staging)",
+                        required=True,
+                    ),
+                    PromptArgument(
+                        name="metric",
+                        description="Metric name to query (e.g., up, http_requests_total)",
+                        required=True,
+                    ),
+                    PromptArgument(
+                        name="time_range",
+                        description="Time range (e.g., '1h', '24h', '7d')",
+                        required=False,
+                    ),
+                ],
+            ),
+            Prompt(
+                name="troubleshoot-alert",
+                description="Help troubleshoot a firing alert in Prometheus",
+                arguments=[
+                    PromptArgument(
+                        name="environment",
+                        description="Target environment",
+                        required=True,
+                    ),
+                    PromptArgument(
+                        name="alert_name",
+                        description="Name of the alert to investigate",
+                        required=True,
+                    ),
+                ],
+            ),
+            Prompt(
+                name="service-health",
+                description="Check overall health of a service using multiple metrics",
+                arguments=[
+                    PromptArgument(
+                        name="environment",
+                        description="Target environment",
+                        required=True,
+                    ),
+                    PromptArgument(
+                        name="service",
+                        description="Service name or job label",
+                        required=True,
+                    ),
+                ],
+            ),
+        ]
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
+        args = arguments or {}
+
+        if name == "query-metric":
+            env = args.get("environment", "production")
+            metric = args.get("metric", "up")
+            time_range = args.get("time_range", "1h")
+
+            return GetPromptResult(
+                description=f"Query {metric} in {env}",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(
+                            type="text",
+                            text=(
+                                f"Please check the current value of the metric '{metric}' "
+                                f"in the '{env}' Prometheus environment. "
+                                f"Also show me the trend over the last {time_range} using a range query. "
+                                f"Summarize the results and highlight any anomalies."
+                            ),
+                        ),
+                    )
+                ],
+            )
+
+        elif name == "troubleshoot-alert":
+            env = args.get("environment", "production")
+            alert_name = args.get("alert_name", "")
+
+            return GetPromptResult(
+                description=f"Troubleshoot alert '{alert_name}' in {env}",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(
+                            type="text",
+                            text=(
+                                f"I need to troubleshoot the alert '{alert_name}' in the '{env}' environment.\n"
+                                f"Please:\n"
+                                f"1. Check if this alert is currently firing (use list_alerts)\n"
+                                f"2. Find the alerting rule definition (use list_rules)\n"
+                                f"3. Check the underlying metrics the alert depends on\n"
+                                f"4. Check the health of relevant scrape targets\n"
+                                f"5. Provide a summary of findings and possible root causes."
+                            ),
+                        ),
+                    )
+                ],
+            )
+
+        elif name == "service-health":
+            env = args.get("environment", "production")
+            service = args.get("service", "")
+
+            return GetPromptResult(
+                description=f"Check health of service '{service}' in {env}",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(
+                            type="text",
+                            text=(
+                                f"Please check the overall health of service '{service}' in the '{env}' "
+                                f"Prometheus environment. Check:\n"
+                                f"1. Is the service up? (query 'up{{job=~\".*{service}.*\"}}')\n"
+                                f"2. CPU usage (query rate of container_cpu_usage_seconds_total)\n"
+                                f"3. Memory usage (query container_memory_working_set_bytes)\n"
+                                f"4. Any active alerts related to this service\n"
+                                f"5. Target health status\n"
+                                f"Summarize the health status in a concise report."
+                            ),
+                        ),
+                    )
+                ],
+            )
+
+        else:
+            raise ValueError(f"Unknown prompt: {name}")
 
     return server
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configure logging."""
+    """Configure logging to stderr (so it doesn't interfere with stdio transport)."""
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
     )
+    root_logger = logging.getLogger()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(level)
 
 
 def main() -> None:
@@ -115,8 +330,8 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        default="~/.prometheus-mcp/config.yaml",
-        help="Path to configuration file (default: ~/.prometheus-mcp/config.yaml)",
+        default=None,
+        help="Path to configuration file (default: auto-detect ~/.prometheus-mcp/config.yaml or PROMETHEUS_URL)",
     )
     parser.add_argument(
         "--host",
@@ -139,8 +354,8 @@ def main() -> None:
         "--transport",
         type=str,
         choices=["stdio", "http"],
-        default="http",
-        help="Transport mode: stdio (for local) or http (for remote) (default: http)",
+        default="stdio",
+        help="Transport mode: stdio (for local) or http (for remote) (default: stdio)",
     )
 
     args = parser.parse_args()
@@ -149,8 +364,7 @@ def main() -> None:
     # Load configuration
     try:
         config = load_config(args.config)
-        logger.info(f"Loaded config from {args.config}")
-        logger.info(f"Environments: {', '.join(config.list_environments())}")
+        logger.info(f"Loaded config with environments: {', '.join(config.list_environments())}")
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         sys.exit(1)
@@ -160,7 +374,6 @@ def main() -> None:
 
     if args.transport == "stdio":
         logger.info("Starting in stdio mode")
-        import asyncio
         from mcp.server.stdio import stdio_server
 
         async def run_stdio() -> None:
@@ -174,37 +387,32 @@ def main() -> None:
         asyncio.run(run_stdio())
     else:
         logger.info(f"Starting HTTP server on {args.host}:{args.port}")
-
-        import asyncio
         import uvicorn
         from starlette.applications import Starlette
         from starlette.routing import Mount
         from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
-        # Create session manager
         session_manager = StreamableHTTPSessionManager(
             app=server,
-            event_store=None,  # In-memory only
+            event_store=None,
             json_response=True,
         )
 
-        # Create ASGI app (session_manager handles routing internally)
         app = Starlette(
             routes=[
                 Mount("/", app=session_manager.handle_request),
             ],
         )
 
-        # Run server with session manager context
         async def run_server():
             async with session_manager.run():
-                config = uvicorn.Config(
+                srv_config = uvicorn.Config(
                     app,
                     host=args.host,
                     port=args.port,
                     log_level="debug" if args.verbose else "info",
                 )
-                srv = uvicorn.Server(config)
+                srv = uvicorn.Server(srv_config)
                 await srv.serve()
 
         asyncio.run(run_server())
