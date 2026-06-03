@@ -14,6 +14,9 @@
 - 🏷️ **标签查询** - 发现标签的可能值
 - ⚙️ **运行时配置** - 查看 Prometheus 运行时 YAML 配置
 - 🚩 **启动参数** - 查看 Prometheus 命令行启动参数
+- 💻 **运行时信息** - 查看 goroutine、GOMAXPROCS、内存分配等内部状态
+- 🗄️ **TSDB 统计** - 查看 head series、WAL、compaction 等存储状态
+- 🎯 **目标元数据** - 查看特定 target 暴露的指标信息
 - 🔐 **多环境支持** - 同时管理多个 Prometheus 实例
 - 🔒 **认证兼容** - 支持无认证、Basic Auth、Bearer Token
 
@@ -149,6 +152,9 @@ mcp_servers:
 | `prometheus_get_config` | 获取 Prometheus 运行时配置（YAML） | `/api/v1/status/config` |
 | `prometheus_get_flags` | 获取 Prometheus 启动参数 | `/api/v1/status/flags` |
 | `prometheus_list_alertmanagers` | 列出 Alertmanager 实例及连接状态 | `/api/v1/alertmanagers` |
+| `prometheus_get_runtime_info` | 获取 Prometheus 运行时信息（goroutine、内存等） | `/api/v1/status/runtimeinfo` |
+| `prometheus_get_tsdb_stats` | 获取 TSDB 统计信息（head series、WAL、compaction） | `/api/v1/status/tsdb` |
+| `prometheus_get_target_metadata` | 获取目标元数据（特定 target 暴露的指标） | `/api/v1/targets/metadata` |
 
 ## 💬 使用示例
 

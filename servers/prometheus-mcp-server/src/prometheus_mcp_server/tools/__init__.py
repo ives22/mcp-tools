@@ -522,6 +522,77 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "required": ["environment"],
             },
         },
+        {
+            "name": "prometheus_get_runtime_info",
+            "description": (
+                "Get Prometheus runtime information including goroutine count, GOMAXPROCS, "
+                "memory allocation, and other internal runtime stats. "
+                "Corresponds to /api/v1/status/runtimeinfo. "
+                "Use for diagnosing Prometheus performance issues."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "environment": {
+                        "type": "string",
+                        "description": "Target environment name",
+                    },
+                },
+                "required": ["environment"],
+            },
+        },
+        {
+            "name": "prometheus_get_tsdb_stats",
+            "description": (
+                "Get TSDB (Time Series Database) statistics including head series count, "
+                "head chunks, WAL size, checkpoint info, and compaction details. "
+                "Corresponds to /api/v1/status/tsdb. "
+                "Use for monitoring storage health and diagnosing TSDB-related issues."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "environment": {
+                        "type": "string",
+                        "description": "Target environment name",
+                    },
+                },
+                "required": ["environment"],
+            },
+        },
+        {
+            "name": "prometheus_get_target_metadata",
+            "description": (
+                "Get metadata about metrics exposed by specific scrape targets. "
+                "More granular than /metadata — shows which metrics each target provides. "
+                "Corresponds to /api/v1/targets/metadata. "
+                "Use to discover what metrics a particular job/target exposes."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "environment": {
+                        "type": "string",
+                        "description": "Target environment name",
+                    },
+                    "match_target": {
+                        "type": "string",
+                        "description": "Optional: target matcher (e.g., '{job=\"prometheus\"}')",
+                    },
+                    "metric": {
+                        "type": "string",
+                        "description": "Optional: filter by metric name",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "minimum": 1,
+                        "maximum": 10000,
+                    },
+                },
+                "required": ["environment"],
+            },
+        },
     ]
 
 
@@ -790,6 +861,47 @@ async def handle_list_alertmanagers(client: PrometheusClient, env: str, argument
         return {"error": str(e), "environment": env}
 
 
+async def handle_get_runtime_info(client: PrometheusClient, env: str, arguments: dict) -> dict:
+    """Handle prometheus_get_runtime_info tool call."""
+    logger.info(f"Get runtime info (env={env})")
+    
+    try:
+        data = await client.get_runtime_info()
+        return {"environment": env, "data": data}
+    except PrometheusError as e:
+        return {"error": str(e), "environment": env}
+
+
+async def handle_get_tsdb_stats(client: PrometheusClient, env: str, arguments: dict) -> dict:
+    """Handle prometheus_get_tsdb_stats tool call."""
+    logger.info(f"Get TSDB stats (env={env})")
+    
+    try:
+        data = await client.get_tsdb_stats()
+        return {"environment": env, "data": data}
+    except PrometheusError as e:
+        return {"error": str(e), "environment": env}
+
+
+async def handle_get_target_metadata(client: PrometheusClient, env: str, arguments: dict) -> dict:
+    """Handle prometheus_get_target_metadata tool call."""
+    match_target = arguments.get("match_target")
+    metric = arguments.get("metric")
+    limit = arguments.get("limit")
+    
+    logger.info(f"Get target metadata (env={env}, match_target={match_target}, metric={metric})")
+    
+    try:
+        data = await client.get_target_metadata(
+            match_target=match_target,
+            metric=metric,
+            limit=limit,
+        )
+        return {"environment": env, "data": data}
+    except PrometheusError as e:
+        return {"error": str(e), "environment": env}
+
+
 # Handler dispatch table
 HANDLERS = {
     "prometheus_query": handle_query,
@@ -807,4 +919,7 @@ HANDLERS = {
     "prometheus_get_config": handle_get_config,
     "prometheus_get_flags": handle_get_flags,
     "prometheus_list_alertmanagers": handle_list_alertmanagers,
+    "prometheus_get_runtime_info": handle_get_runtime_info,
+    "prometheus_get_tsdb_stats": handle_get_tsdb_stats,
+    "prometheus_get_target_metadata": handle_get_target_metadata,
 }

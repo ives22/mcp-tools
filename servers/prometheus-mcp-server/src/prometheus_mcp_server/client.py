@@ -254,3 +254,33 @@ class PrometheusClient:
     async def get_alertmanagers(self) -> dict[str, Any]:
         """Get Alertmanager instances (/api/v1/alertmanagers)."""
         return await self._request("GET", "/api/v1/alertmanagers")
+
+    async def get_runtime_info(self) -> dict[str, Any]:
+        """Get Prometheus runtime information (/api/v1/status/runtimeinfo)."""
+        return await self._request("GET", "/api/v1/status/runtimeinfo")
+
+    async def get_tsdb_stats(self) -> dict[str, Any]:
+        """Get TSDB statistics (/api/v1/status/tsdb)."""
+        return await self._request("GET", "/api/v1/status/tsdb")
+
+    async def get_target_metadata(
+        self,
+        match_target: str | None = None,
+        metric: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Get target metadata (/api/v1/targets/metadata).
+
+        Args:
+            match_target: Target matcher (e.g., '{job="prometheus"}')
+            metric: Filter by metric name
+            limit: Maximum number of results
+        """
+        params: dict[str, Any] = {}
+        if match_target:
+            params["match_target"] = match_target
+        if metric:
+            params["metric"] = metric
+        if limit is not None:
+            params["limit"] = limit
+        return await self._request("GET", "/api/v1/targets/metadata", params=params)
