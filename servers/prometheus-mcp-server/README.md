@@ -2,6 +2,8 @@
 
 一个独立的 MCP Server，提供 Prometheus 监控指标的查询能力，支持通过自然语言与 AI 助手交互。
 
+PyPI: https://pypi.org/project/prom-mcp-server/
+
 ## ✨ 功能特性
 
 - 📊 **即时查询** - 查询当前指标值（`/api/v1/query`）
@@ -26,9 +28,9 @@
 
 ```
 ┌─────────────┐     stdio (stdin/stdout)     ┌─────────────────────┐
-│  Hermes     │ ◄──────────────────────────► │  Prometheus         │
-│  Agent      │                              │  MCP Server (子进程)  │
-│             │                              └────────┬────────────┘
+│  AI Agent   │ ◄──────────────────────────► │  prom-mcp-server    │
+│  (Hermes,   │                              │  (子进程)            │
+│   Claude..) │                              └────────┬────────────┘
 └─────────────┘                                       │
                                             ┌─────────┴─────────┐
                                             │  Config File       │
@@ -41,8 +43,8 @@
 
 ```
 ┌─────────────┐    HTTP/StreamableHTTP     ┌─────────────────────┐
-│  Hermes     │ ◄────────────────────────► │  Prometheus         │
-│  Agent      │   MCP Protocol             │  MCP Server (独立服务)│
+│  AI Agent   │ ◄────────────────────────► │  prom-mcp-server    │
+│             │   MCP Protocol             │  (独立服务)          │
 └─────────────┘                            └────────┬────────────┘
                                                     │
                                           ┌─────────┴─────────┐
@@ -55,6 +57,12 @@
 ## 🚀 快速开始
 
 ### 1. 安装
+
+#### 从 PyPI 安装
+
+```bash
+pip install prom-mcp-server
+```
 
 #### 从 Git 仓库安装
 
@@ -70,66 +78,74 @@ cd mcp-tools/servers/prometheus-mcp-server
 pip install .
 ```
 
-#### 使用 uvx 免安装运行
-
-```bash
-# 首次运行会自动下载，无需手动 pip install
-uvx prometheus-mcp-server --transport stdio
-```
-
 #### 使用 Docker（HTTP 模式，无需 Python 环境）
 
 ```bash
-# 构建镜像
 git clone https://github.com/ives22/mcp-tools.git
 cd mcp-tools/servers/prometheus-mcp-server
-docker build -t prometheus-mcp-server .
-
-# 运行（挂载配置文件）
-docker run -d --name prometheus-mcp \
+docker build -t prom-mcp-server .
+docker run -d --name prom-mcp \
   -p 8000:8000 \
   -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
-  prometheus-mcp-server
-
-# 或使用 docker-compose（见下方 docker-compose 章节）
+  prom-mcp-server
 ```
 
 ### 2. 配置
 
 ```bash
-# 创建配置目录
 mkdir -p ~/.prometheus-mcp
-
-# 复制配置模板
 cp config/config.yaml.example ~/.prometheus-mcp/config.yaml
-
-# 编辑配置，填入你的 Prometheus 地址和认证信息
 vim ~/.prometheus-mcp/config.yaml
+```
+
+配置示例：
+
+```yaml
+environments:
+  production:
+    url: "http://prometheus.prod:9090"
+    auth:
+      type: "none"  # none | basic | bearer
+    timeout: 30
+    verify_ssl: true
+
+  staging:
+    url: "http://prometheus.staging:9090"
+    auth:
+      type: "bearer"
+      token: "your-token-here"
+    timeout: 30
+    verify_ssl: true
+
+defaults:
+  timeout: 30
+  max_results: 200
+  default_step: "1m"
 ```
 
 ### 3. 启动服务
 
-#### 方式一：uvx 直接运行（推荐，免安装）
+#### 方式一：pip 安装后运行
 
 ```bash
-# stdio 模式（用于 AI Agent 本地集成，推荐）
-uvx prometheus-mcp-server --transport stdio
+# stdio 模式（本地集成，推荐）
+prom-mcp-server --transport stdio
 
-# HTTP 模式（独立服务，用于远程或多客户端共享）
-uvx prometheus-mcp-server --host 0.0.0.0 --port 8000
-```
-
-#### 方式二：本地安装后运行
-
-```bash
-# HTTP 模式（默认，独立服务）
-prometheus-mcp-server --host 0.0.0.0 --port 8000
-
-# stdio 模式（本地集成）
-prometheus-mcp-server --transport stdio
+# HTTP 模式（独立服务）
+prom-mcp-server --host 0.0.0.0 --port 8000
 
 # 详细日志
-prometheus-mcp-server -v
+prom-mcp-server -v
+```
+
+#### 方式二：uvx 免安装运行
+
+```bash
+# stdio 模式
+uvx prom-mcp-server --transport stdio
+
+# HTTP 模式
+uvx prom-mcp-server --host 0.0.0.0 --port 8000
 ```
 
 #### 方式三：Docker 运行
@@ -138,32 +154,27 @@ prometheus-mcp-server -v
 # HTTP 模式（默认）
 docker run -d -p 8000:8000 \
   -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
-  prometheus-mcp-server
+  prom-mcp-server
 
-# 自定义端口
-docker run -d -p 9000:9000 \
-  -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
-  prometheus-mcp-server --port 9000
-
-# stdio 模式（用于 Docker + MCP 客户端集成）
+# stdio 模式
 docker run -i --rm \
   -v ~/.prometheus-mcp/config.yaml:/root/.prometheus-mcp/config.yaml \
-  prometheus-mcp-server --transport stdio
+  prom-mcp-server --transport stdio
 ```
 
 ### 4. 配置 MCP 客户端
 
 本 MCP Server 兼容所有支持 MCP 协议的客户端（Hermes Agent、Claude Desktop、Cursor、Continue 等）。
 
-#### stdio 模式（推荐，无需启动独立服务）
+#### stdio 模式（推荐）
 
 **Hermes Agent** (`~/.hermes/config.yaml`)：
 
 ```yaml
 mcp_servers:
   prometheus:
-    command: "uvx"
-    args: ["prometheus-mcp-server", "--transport", "stdio"]
+    command: "prom-mcp-server"
+    args: ["--transport", "stdio"]
     timeout: 60
     connect_timeout: 30
 ```
@@ -174,16 +185,14 @@ mcp_servers:
 {
   "mcpServers": {
     "prometheus": {
-      "command": "uvx",
-      "args": ["prometheus-mcp-server", "--transport", "stdio"]
+      "command": "prom-mcp-server",
+      "args": ["--transport", "stdio"]
     }
   }
 }
 ```
 
-#### HTTP 模式（独立服务）
-
-先启动 HTTP 服务，然后在客户端配置中添加：
+#### HTTP 模式
 
 ```yaml
 mcp_servers:
@@ -200,26 +209,20 @@ mcp_servers:
 ```yaml
 # docker-compose.yml
 services:
-  prometheus-mcp:
+  prom-mcp:
     build: .
     ports:
       - "8000:8000"
     volumes:
       - ./config.yaml:/root/.prometheus-mcp/config.yaml:ro
     restart: unless-stopped
-    environment:
-      - LOG_LEVEL=INFO
 ```
 
 ```bash
-# 启动
 docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
 ```
 
-## 📋 可用工具
+## 📋 可用工具（18 个）
 
 | 工具名称 | 描述 | 对应 API |
 |---------|------|----------|
@@ -238,55 +241,37 @@ docker-compose logs -f
 | `prometheus_get_config` | 获取 Prometheus 运行时配置（YAML） | `/api/v1/status/config` |
 | `prometheus_get_flags` | 获取 Prometheus 启动参数 | `/api/v1/status/flags` |
 | `prometheus_list_alertmanagers` | 列出 Alertmanager 实例及连接状态 | `/api/v1/alertmanagers` |
-| `prometheus_get_runtime_info` | 获取 Prometheus 运行时信息（goroutine、内存等） | `/api/v1/status/runtimeinfo` |
-| `prometheus_get_tsdb_stats` | 获取 TSDB 统计信息（head series、WAL、compaction） | `/api/v1/status/tsdb` |
-| `prometheus_get_target_metadata` | 获取目标元数据（特定 target 暴露的指标） | `/api/v1/targets/metadata` |
+| `prometheus_get_runtime_info` | 获取运行时信息（goroutine、内存等） | `/api/v1/status/runtimeinfo` |
+| `prometheus_get_tsdb_stats` | 获取 TSDB 统计（head series、WAL） | `/api/v1/status/tsdb` |
+| `prometheus_get_target_metadata` | 获取目标元数据 | `/api/v1/targets/metadata` |
 
 ## 💬 使用示例
 
-配置完成后，可以通过自然语言向机器人提问：
+配置完成后，可以通过自然语言向 AI 助手提问：
 
 ```
 用户: "帮我查一下 production 环境当前有多少服务是 up 的"
-→ Agent 调用 mcp_prometheus_query(query="up", env="production")
+→ Agent 调用 prometheus_query(query="up", environment="production")
 
 用户: "过去 1 小时 production 的 CPU 使用率趋势如何？"
-→ Agent 调用 mcp_prometheus_query_range(
+→ Agent 调用 prometheus_query_range(
       query="100 - (avg by(instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)",
-      env="production",
+      environment="production",
       start="1h ago",
       step="5m"
     )
 
 用户: "production 环境有哪些告警正在触发？"
-→ Agent 调用 mcp_prometheus_list_alerts(env="production")
+→ Agent 调用 prometheus_list_alerts(environment="production")
 
-用户: "staging 环境的 node_exporter targets 状态正常吗？"
-→ Agent 调用 mcp_prometheus_list_targets(env="staging")
+用户: "线上游戏 5318 当前有多少个 Pod？"
+→ Agent 调用 prometheus_query(
+      query="kube_pod_info{namespace=\"api-games\", pod=~\"5318.*\"}",
+      environment="production"
+    )
 ```
 
-## ⚙️ 配置说明
-
-### 环境配置
-
-```yaml
-environments:
-  production:
-    url: "http://prometheus.prod:9090"
-    auth:
-      type: "none"  # none | basic | bearer
-      # basic 认证:
-      # type: "basic"
-      # username: "admin"
-      # password: "secret"
-      # bearer 认证:
-      # type: "bearer"
-      # token: "your-token"
-    timeout: 30        # 请求超时（秒）
-    verify_ssl: true   # SSL 证书验证
-```
-
-### 启动参数
+## ⚙️ 启动参数
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -299,13 +284,8 @@ environments:
 ## 🔧 开发
 
 ```bash
-# 安装开发依赖
 pip install -e ".[dev]"
-
-# 运行测试
 pytest
-
-# 代码检查
 ruff check src/
 mypy src/
 ```
@@ -315,6 +295,8 @@ mypy src/
 ```
 prometheus-mcp-server/
 ├── pyproject.toml                 # 项目配置
+├── Dockerfile                     # Docker 构建
+├── docker-compose.yml             # Docker Compose 编排
 ├── README.md                      # 文档
 ├── config/
 │   └── config.yaml.example        # 配置示例

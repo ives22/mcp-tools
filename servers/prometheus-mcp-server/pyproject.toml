@@ -1,6 +1,6 @@
 [project]
-name = "prometheus-mcp-server"
-version = "0.1.0"
+name = "prom-mcp-server"
+version = "0.2.0"
 description = "MCP Server for Prometheus monitoring - query metrics, alerts, targets via natural language"
 readme = "README.md"
 license = {text = "MIT"}
@@ -17,6 +17,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
 ]
 
 dependencies = [
@@ -38,7 +40,13 @@ dev = [
 ]
 
 [project.scripts]
-prometheus-mcp-server = "prometheus_mcp_server.__main__:main"
+prom-mcp-server = "prometheus_mcp_server.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/ives22/mcp-tools"
+Repository = "https://github.com/ives22/mcp-tools"
+Documentation = "https://github.com/ives22/mcp-tools/tree/main/servers/prometheus-mcp-server#readme"
+Issues = "https://github.com/ives22/mcp-tools/issues"
 
 [build-system]
 requires = ["hatchling"]

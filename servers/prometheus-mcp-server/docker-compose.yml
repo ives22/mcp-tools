@@ -2,12 +2,12 @@
 # 适用于长期运行的 HTTP 服务模式
 
 services:
-  prometheus-mcp:
+  prom-mcp:
     build:
       context: .
       dockerfile: Dockerfile
-    image: prometheus-mcp-server:latest
-    container_name: prometheus-mcp
+    image: prom-mcp-server:latest
+    container_name: prom-mcp
     ports:
       - "8000:8000"
     volumes:
