@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "jenkins-local": {
+      "cwd": ".",
+      "command": "node",
+      "args": [
+        "./src/server.mjs"
+      ]
+    }
+  }
+}

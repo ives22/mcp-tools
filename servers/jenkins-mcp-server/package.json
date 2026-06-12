@@ -1,0 +1,14 @@
+{
+  "name": "jenkins-mcp-server",
+  "version": "0.1.0",
+  "description": "Local MCP server for Jenkins operations via Jenkins HTTP API",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node ./src/server.mjs",
+    "check": "node --check ./src/server.mjs && node --check ./src/jenkins-client.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
