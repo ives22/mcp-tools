@@ -1,0 +1,70 @@
+[project]
+name = "acr-mcp-server"
+version = "0.1.0"
+description = "MCP Server for Alibaba Cloud Container Registry (ACR) - query namespaces, repos, and image tags via natural language"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Jalen"}
+]
+keywords = ["mcp", "acr", "alibaba-cloud", "container-registry", "docker", "ai-agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "mcp>=1.0.0",
+    "alibabacloud-cr20160607>=1.0.0",
+    "alibabacloud-tea-openapi>=0.4.0",
+    "alibabacloud-tea-util>=0.3.0",
+    "alibabacloud_openapi_util>=0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4.0",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+acr-mcp-server = "acr_mcp_server.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/ives22/mcp-tools"
+Repository = "https://github.com/ives22/mcp-tools"
+Documentation = "https://github.com/ives22/mcp-tools/tree/main/servers/acr-mcp-server#readme"
+Issues = "https://github.com/ives22/mcp-tools/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/acr_mcp_server"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
