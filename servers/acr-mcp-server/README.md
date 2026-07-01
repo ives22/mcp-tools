@@ -216,6 +216,34 @@ claude mcp get acr
 - "看下 relax_many_game 下 5117 这个仓库的 tag `abc123` 是否存在"
 - "列出 5117 仓库最新的 5 个 tag"
 
+## 在 Hermes Agent 中使用
+
+编辑 Hermes Agent 配置文件 `~/.hermes/config.yaml`，在 `mcp_servers` 下添加 ACR 配置：
+
+```yaml
+mcp_servers:
+  acr:
+    command: "acr-mcp-server"
+    env:
+      ALIBABA_CLOUD_ACCESS_KEY_ID: "your_access_key_id"
+      ALIBABA_CLOUD_ACCESS_KEY_SECRET: "your_access_key_secret"
+      ACR_REGION_ID: "ap-southeast-1"
+    timeout: 60
+    connect_timeout: 30
+```
+
+如果环境变量已在 `~/.zshrc` 中导出，可以省略 `env` 块，Hermes Agent 会自动继承：
+
+```yaml
+mcp_servers:
+  acr:
+    command: "acr-mcp-server"
+    timeout: 60
+    connect_timeout: 30
+```
+
+配置完成后重启 Hermes Agent 即可使用。
+
 ## 命令行参数
 
 ```bash
